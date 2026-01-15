@@ -1,0 +1,27 @@
+'use client';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar } from 'lucide-react';
+
+export default function AdminSessionsPage() {
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Live Sessions</h1>
+        <p className="text-gray-600">Manage all coaching sessions</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            All Sessions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600">No sessions scheduled</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

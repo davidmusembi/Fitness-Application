@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Storage - Deeqdarajjo</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0.5rem;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #764ba2;
+        }
+        .success {
+            color: #10b981;
+            margin-top: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Scroll/Click Issue</h1>
+        <p>If you're experiencing scrolling or clicking problems, clear your browser storage:</p>
+        <button onclick="clearAll()">Clear All Storage</button>
+        <button onclick="goHome()">Go to Login</button>
+        <p class="success" id="success">✅ Storage cleared! Redirecting...</p>
+    </div>
+
+    <script>
+        function clearAll() {
+            // Clear localStorage
+            localStorage.clear();
+
+            // Clear sessionStorage
+            sessionStorage.clear();
+
+            // Clear cookies
+            document.cookie.split(";").forEach(function(c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            // Clear IndexedDB
+            if (window.indexedDB) {
+                indexedDB.databases().then(databases => {
+                    databases.forEach(db => {
+                        indexedDB.deleteDatabase(db.name);
+                    });
+                });
+            }
+
+            // Show success message
+            document.getElementById('success').style.display = 'block';
+
+            // Redirect to login after 2 seconds
+            setTimeout(() => {
+                window.location.href = '/auth/login';
+            }, 2000);
+        }
+
+        function goHome() {
+            window.location.href = '/auth/login';
+        }
+    </script>
+</body>
+</html>

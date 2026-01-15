@@ -1,0 +1,621 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, CreditCard, Smartphone, Check } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { toast } from 'sonner';
+
+interface CartItem {
+  _id: string;
+  name: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  quantity: number;
+}
+
+type PaymentMethod = 'mpesa' | 'stripe' | 'paypal' | 'card' | null;
+
+export default function PublicCartPage() {
+  const router = useRouter();
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>(null);
+  const [customerInfo, setCustomerInfo] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: '',
+  });
+
+  useEffect(() => {
+    // Load cart from localStorage
+    const savedCart = localStorage.getItem('publicCart');
+    if (savedCart) {
+      setCart(JSON.parse(savedCart));
+    }
+  }, []);
+
+  const updateCart = (newCart: CartItem[]) => {
+    setCart(newCart);
+    localStorage.setItem('publicCart', JSON.stringify(newCart));
+  };
+
+  const updateQuantity = (productId: string, delta: number) => {
+    const newCart = cart.map((item) =>
+      item._id === productId
+        ? { ...item, quantity: Math.max(1, item.quantity + delta) }
+        : item
+    );
+    updateCart(newCart);
+  };
+
+  const removeItem = (productId: string) => {
+    const newCart = cart.filter((item) => item._id !== productId);
+    updateCart(newCart);
+    toast.success('Item removed from cart');
+  };
+
+  const proceedToPayment = () => {
+    // Validate form
+    if (!customerInfo.fullName || !customerInfo.email || !customerInfo.phone) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!customerInfo.street || !customerInfo.city || !customerInfo.state || !customerInfo.zipCode || !customerInfo.country) {
+      toast.error('Please fill in complete shipping address');
+      return;
+    }
+
+    setShowPaymentDialog(true);
+  };
+
+  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+    setSelectedPayment(method);
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!selectedPayment) {
+      toast.error('Please select a payment method');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/shop/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: cart,
+          customerInfo,
+          paymentMethod: selectedPayment,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Order placed successfully!');
+        localStorage.removeItem('publicCart');
+        setCart([]);
+        setShowCheckout(false);
+        setShowPaymentDialog(false);
+
+        // Show success message and redirect
+        setTimeout(() => {
+          router.push('/shop');
+        }, 2000);
+      } else {
+        toast.error(data.error || 'Failed to place order');
+      }
+    } catch (error) {
+      toast.error('Failed to proceed to checkout');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const tax = subtotal * 0.1; // 10% tax
+  const shipping = subtotal > 50 ? 0 : 5.99; // Free shipping over $50
+  const total = subtotal + tax + shipping;
+
+  const paymentMethods = [
+    {
+      id: 'card' as PaymentMethod,
+      name: 'Credit/Debit Card',
+      description: 'Pay securely with your card',
+      icon: <CreditCard className="h-8 w-8" />,
+      color: 'from-blue-500 to-blue-600',
+      badges: ['VISA', 'Mastercard', 'Amex'],
+    },
+    {
+      id: 'mpesa' as PaymentMethod,
+      name: 'M-Pesa',
+      description: 'Pay with M-Pesa mobile money',
+      icon: <Smartphone className="h-8 w-8" />,
+      color: 'from-green-500 to-green-600',
+      logo: 'M-PESA',
+    },
+    {
+      id: 'stripe' as PaymentMethod,
+      name: 'Stripe',
+      description: 'Secure payment with Stripe',
+      icon: <CreditCard className="h-8 w-8" />,
+      color: 'from-purple-500 to-purple-600',
+      badges: [],
+    },
+    {
+      id: 'paypal' as PaymentMethod,
+      name: 'PayPal',
+      description: 'Pay with your PayPal account',
+      icon: <CreditCard className="h-8 w-8" />,
+      color: 'from-blue-500 to-blue-600',
+      badges: [],
+    },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Header */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            <Link href="/shop">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Shop
+              </Button>
+            </Link>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Shopping Cart
+            </h1>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        {cart.length === 0 ? (
+          <Card className="text-center py-12 bg-white shadow-xl border-0 rounded-2xl">
+            <CardContent>
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full mb-4">
+                <ShoppingBag className="h-10 w-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2">Your cart is empty</h2>
+              <p className="text-muted-foreground mb-6">
+                Add some products to your cart to get started
+              </p>
+              <Link href="/shop">
+                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg">
+                  Browse Products
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Cart Items */}
+            <div className="lg:col-span-2 space-y-4">
+              <Card className="bg-white shadow-xl border-0 rounded-2xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Cart Items ({cart.length})</span>
+                    <Badge className="bg-blue-100 text-blue-700">
+                      {cart.reduce((sum, item) => sum + item.quantity, 0)} items
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {cart.map((item) => (
+                    <div key={item._id}>
+                      <div className="flex gap-4">
+                        <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 shadow-md">
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {item.description}
+                          </p>
+                          <p className="text-xl font-bold text-blue-600 mt-2">
+                            ${item.price.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end justify-between">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeItem(item._id)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => updateQuantity(item._id, -1)}
+                              disabled={item.quantity === 1}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-8 text-center font-semibold">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => updateQuantity(item._id, 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <Separator className="mt-4" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Checkout Form */}
+              {showCheckout && (
+                <Card className="bg-white shadow-xl border-0 rounded-2xl">
+                  <CardHeader>
+                    <CardTitle>Shipping Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="fullName">Full Name *</Label>
+                        <Input
+                          id="fullName"
+                          value={customerInfo.fullName}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, fullName: e.target.value })
+                          }
+                          placeholder="John Doe"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={customerInfo.email}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, email: e.target.value })
+                          }
+                          placeholder="john@example.com"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="phone">Phone Number *</Label>
+                      <Input
+                        id="phone"
+                        value={customerInfo.phone}
+                        onChange={(e) =>
+                          setCustomerInfo({ ...customerInfo, phone: e.target.value })
+                        }
+                        placeholder="+1 (555) 000-0000"
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <Separator />
+
+                    <div>
+                      <Label htmlFor="street">Street Address *</Label>
+                      <Input
+                        id="street"
+                        value={customerInfo.street}
+                        onChange={(e) =>
+                          setCustomerInfo({ ...customerInfo, street: e.target.value })
+                        }
+                        placeholder="123 Main St"
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city">City *</Label>
+                        <Input
+                          id="city"
+                          value={customerInfo.city}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, city: e.target.value })
+                          }
+                          placeholder="New York"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="state">State *</Label>
+                        <Input
+                          id="state"
+                          value={customerInfo.state}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, state: e.target.value })
+                          }
+                          placeholder="NY"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="zipCode">ZIP Code *</Label>
+                        <Input
+                          id="zipCode"
+                          value={customerInfo.zipCode}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, zipCode: e.target.value })
+                          }
+                          placeholder="10001"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="country">Country *</Label>
+                        <Input
+                          id="country"
+                          value={customerInfo.country}
+                          onChange={(e) =>
+                            setCustomerInfo({ ...customerInfo, country: e.target.value })
+                          }
+                          placeholder="USA"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Order Summary */}
+            <div>
+              <Card className="sticky top-4 bg-white shadow-xl border-0 rounded-2xl">
+                <CardHeader>
+                  <CardTitle>Order Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tax (10%)</span>
+                      <span className="font-medium">${tax.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Shipping</span>
+                      <span className="font-medium">
+                        {shipping === 0 ? (
+                          <span className="text-green-600 font-semibold">FREE</span>
+                        ) : (
+                          `$${shipping.toFixed(2)}`
+                        )}
+                      </span>
+                    </div>
+                    {subtotal < 50 && subtotal > 0 && (
+                      <div className="bg-blue-50 p-3 rounded-lg">
+                        <p className="text-xs text-blue-700">
+                          Add <span className="font-bold">${(50 - subtotal).toFixed(2)}</span> more for free shipping!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-semibold">Total</span>
+                    <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      ${total.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {!showCheckout ? (
+                    <Button
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all h-12"
+                      size="lg"
+                      onClick={() => setShowCheckout(true)}
+                    >
+                      Proceed to Checkout
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all h-12"
+                        size="lg"
+                        onClick={proceedToPayment}
+                      >
+                        <CreditCard className="mr-2 h-5 w-5" />
+                        Select Payment Method
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setShowCheckout(false)}
+                      >
+                        Back to Cart
+                      </Button>
+                    </div>
+                  )}
+
+                  <Link href="/shop">
+                    <Button variant="ghost" className="w-full">
+                      Continue Shopping
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Payment Method Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Select Payment Method
+            </DialogTitle>
+            <DialogDescription className="text-sm sm:text-base">
+              Choose your preferred payment method to complete your purchase
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
+            {paymentMethods.map((method) => (
+              <button
+                key={method.id}
+                onClick={() => handlePaymentMethodSelect(method.id)}
+                className={`relative p-4 sm:p-6 rounded-xl border-2 transition-all hover:shadow-lg ${
+                  selectedPayment === method.id
+                    ? method.id === 'mpesa'
+                      ? 'border-green-600 bg-green-50 shadow-lg sm:scale-105'
+                      : 'border-blue-600 bg-blue-50 shadow-lg sm:scale-105'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {selectedPayment === method.id && (
+                  <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+                    <div className={`rounded-full p-1 ${
+                      method.id === 'mpesa' ? 'bg-green-600' : 'bg-blue-600'
+                    }`}>
+                      <Check className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-col items-center text-center">
+                  <div className={`p-3 sm:p-4 rounded-full bg-gradient-to-r ${method.color} text-white mb-3 sm:mb-4`}>
+                    {method.icon}
+                  </div>
+                  <h3 className="font-bold text-base sm:text-lg mb-1">{method.name}</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">{method.description}</p>
+
+                  {method.badges && method.badges.length > 0 && (
+                    <div className="flex gap-1.5 sm:gap-2 mt-1 sm:mt-2 flex-wrap justify-center">
+                      {method.badges.map((badge) => (
+                        <div key={badge} className="text-[10px] sm:text-xs bg-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-gray-300">
+                          {badge}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {method.logo && (
+                    <div className={`mt-2 sm:mt-3 text-xl sm:text-2xl font-bold ${
+                      method.id === 'mpesa' ? 'text-green-600' : 'text-gray-800'
+                    }`}>
+                      {method.logo}
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <Separator className="my-4" />
+
+          {/* Order Summary in Dialog */}
+          <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-4 sm:p-6 rounded-xl border-2 border-purple-200">
+            <div className="flex justify-between items-center mb-2 sm:mb-3">
+              <span className="text-sm sm:text-base text-gray-600">Subtotal</span>
+              <span className="text-sm sm:text-base font-semibold">${subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center mb-2 sm:mb-3">
+              <span className="text-sm sm:text-base text-gray-600">Tax (10%)</span>
+              <span className="text-sm sm:text-base font-semibold">${tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <span className="text-sm sm:text-base text-gray-600">Shipping</span>
+              <span className="text-sm sm:text-base font-semibold">
+                {shipping === 0 ? (
+                  <span className="text-green-600">FREE</span>
+                ) : (
+                  `$${shipping.toFixed(2)}`
+                )}
+              </span>
+            </div>
+            <Separator className="my-2 sm:my-3 bg-purple-300" />
+            <div className="flex justify-between items-center">
+              <span className="text-lg sm:text-xl font-bold">Total</span>
+              <span className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                ${total.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4">
+            <Button
+              variant="outline"
+              className="w-full sm:flex-1 h-11 sm:h-12"
+              onClick={() => {
+                setShowPaymentDialog(false);
+                setSelectedPayment(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="w-full sm:flex-1 h-11 sm:h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold shadow-lg"
+              onClick={handlePlaceOrder}
+              disabled={!selectedPayment || loading}
+            >
+              {loading ? 'Processing...' : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Pay ${total.toFixed(2)}</span>
+                  <span className="sm:hidden">Pay Now</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
